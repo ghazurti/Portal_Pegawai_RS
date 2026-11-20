@@ -17,7 +17,9 @@ use App\Models\Unit;
 use App\Models\User;
 use App\Services\KelengkapanKpsService;
 use App\Services\KelengkapanRuanganService;
+use App\Services\AbsenPdfImportService;
 use App\Services\PegawaiCsvImportService;
+use Illuminate\Support\Str;
 use Database\Seeders\DatabaseSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
@@ -618,5 +620,72 @@ class PortalPegawaiTest extends TestCase
         $this->actingAs($perawat)->get(route('file.dokumen-versi', $dokSop->versi_aktif_id))->assertStatus(200);
         $this->actingAs($mutu)->get(route('file.dokumen-versi', $versiLama->id))->assertStatus(200);
         $this->actingAs($admin)->get(route('file.dokumen-versi', $versiLama->id))->assertStatus(200);
+    }
+
+    public function test_absen_pdf_import_service_and_self_profile_update(): void
+    {
+        $sdm = User::where('email', 'sdm@rs.local')->firstOrFail();
+        $this->actingAs($sdm);
+
+        // 1. Pembentukan email, kode unit, dan tebakan profesi dari format nama absen RS
+        $this->assertEquals('st.contoh.155@rs.local', AbsenPdfImportService::buatEmailDariNama('St. Contoh, AMK', '155'));
+        $this->assertEquals('contoh.dokter.1@rs.local', AbsenPdfImportService::buatEmailDariNama('dr. H. Contoh Dokter', '1'));
+        $this->assertEquals('PRW', AbsenPdfImportService::tebakKodeProfesi('Perawat Contoh, S.Kep, Ns, M.Kep', 'Ruang NICU'));
+        $this->assertEquals('BDN', AbsenPdfImportService::tebakKodeProfesi('Bidan Contoh, S.Tr.Keb', 'Ruang Kebidanan'));
+        $this->assertEquals('DR_SP', AbsenPdfImportService::tebakKodeProfesi('dr. Contoh Spesialis, Sp.THT', 'Dokter Poliklinik'));
+        $this->assertEquals(['kode' => 'ICU', 'nama' => 'Ruang ICU'], AbsenPdfImportService::petakanUnit('Ruang ICU'));
+        $this->assertEquals(['kode' => 'BELUM_DITEMPATKAN', 'nama' => 'Belum Ditempatkan'], AbsenPdfImportService::petakanUnit('BELUM DITAU PENEMPATANYA'));
+
+        // 2. Impor CSV tanpa NIP otomatis membuat unit baru & sandi acak awal serta slip unduhan khusus pemilik
+        $pdfSvc = app(AbsenPdfImportService::class);
+        $csv = $pdfSvc->konversiKeCsv([
+            [
+                'nip' => '',
+                'nama' => 'Perawat Contoh, S.Kep, Ns, M.Kep',
+                'email' => 'perawat.contoh.98@rs.local',
+                'jabatan' => '',
+                'kode_unit' => 'ICU',
+                'nama_unit' => 'Ruang ICU',
+                'kode_profesi' => 'PRW',
+                'no_hp' => '',
+                'role' => User::ROLE_PEGAWAI,
+            ],
+        ]);
+        $hasil = app(PegawaiCsvImportService::class)->imporDariKonten($csv, $sdm);
+        $this->assertEquals(1, $hasil['berhasil']);
+        $this->assertEquals(1, $hasil['unit_baru']);
+        $this->assertCount(1, $hasil['akun_baru']);
+
+        $contohUser = User::where('email', 'perawat.contoh.98@rs.local')->firstOrFail();
+        $this->assertNull($contohUser->nip);
+        $this->assertTrue($contohUser->wajib_ganti_password);
+        $this->assertEquals(Unit::where('kode', 'ICU')->firstOrFail()->id, $contohUser->unit_id);
+
+        // Unduh slip sandi awal hanya bisa oleh SDM/Admin pemilik token
+        $perawat = User::where('email', 'perawat@rs.local')->firstOrFail();
+        $admin = User::where('email', 'admin@rs.local')->firstOrFail();
+        $token = Str::random(32);
+        Storage::disk('berkas_privat')->put('tmp-import/akun-baru-' . $sdm->id . '-' . $token . '.csv', "nama;email\nContoh;perawat.contoh.98@rs.local\n");
+        $this->actingAs($perawat)->get(route('export.hasil-impor', ['token' => $token]))->assertStatus(403);
+        $this->actingAs($admin)->get(route('export.hasil-impor', ['token' => $token]))->assertStatus(404);
+        $resSlip = $this->actingAs($sdm)->get(route('export.hasil-impor', ['token' => $token]));
+        $resSlip->assertStatus(200)->assertHeader('X-Content-Type-Options', 'nosniff');
+
+        // 3. Pegawai bisa memperbarui email, NIP, dan No HP sendiri setelah/bersama ganti sandi
+        $contohUser->update(['wajib_ganti_password' => false]);
+        Livewire::actingAs($contohUser)
+            ->test(GantiPasswordPage::class)
+            ->fillForm([
+                'email' => 'perawat.contoh.icu@rs.local',
+                'nip' => '198801012015012009',
+                'no_hp' => '081299887766',
+            ], 'profilForm')
+            ->call('simpanProfil')
+            ->assertHasNoFormErrors([], 'profilForm');
+
+        $contohFresh = $contohUser->fresh();
+        $this->assertEquals('perawat.contoh.icu@rs.local', $contohFresh->email);
+        $this->assertEquals('198801012015012009', $contohFresh->nip);
+        $this->assertEquals('081299887766', $contohFresh->no_hp);
     }
 }

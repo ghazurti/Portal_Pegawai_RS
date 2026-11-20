@@ -9,6 +9,8 @@ use App\Services\KelengkapanKpsService;
 use App\Services\KelengkapanRuanganService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Storage;
+use Symfony\Component\HttpFoundation\BinaryFileResponse;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class ExportController extends Controller
@@ -163,8 +165,30 @@ class ExportController extends Controller
         abort_unless($user && $user->canVerifyBerkas(), 403);
 
         return $this->streamCsv('Template_Impor_Pegawai.csv', function ($out) {
-            $this->writeCsvRow($out, ['nip', 'nama', 'email', 'jabatan', 'kode_unit', 'kode_profesi', 'no_hp', 'role']);
+            $this->writeCsvRow($out, ['nip', 'nama', 'email', 'jabatan', 'kode_unit', 'nama_unit', 'kode_profesi', 'no_hp', 'role']);
         });
+    }
+
+    public function hasilImporPegawai(string $token): BinaryFileResponse
+    {
+        /** @var User $user */
+        $user = Auth::user();
+        abort_unless($user && $user->canVerifyBerkas(), 403);
+        abort_unless(preg_match('/^[A-Za-z0-9]{32}$/', $token) === 1, 404);
+
+        $disk = Storage::disk('berkas_privat');
+        $relPath = 'tmp-import/akun-baru-' . $user->id . '-' . $token . '.csv';
+        abort_unless($disk->exists($relPath), 404);
+
+        return response()->download(
+            $disk->path($relPath),
+            'Sandi_Awal_Pegawai_' . now()->format('Ymd_His') . '.csv',
+            [
+                'Content-Type' => 'text/csv; charset=UTF-8',
+                'Cache-Control' => 'private, no-store, max-age=0',
+                'X-Content-Type-Options' => 'nosniff',
+            ]
+        )->deleteFileAfterSend(true);
     }
 
     private function streamCsv(string $filename, callable $writer): StreamedResponse

@@ -18,4 +18,5 @@ Route::middleware(['auth', EnsurePasswordChanged::class])->group(function () {
     Route::get('/export/rekap-ruangan', [ExportController::class, 'rekapRuangan'])->name('export.rekap-ruangan');
     Route::get('/export/sosialisasi-sop/{dokumen}', [ExportController::class, 'sosialisasiSop'])->name('export.sosialisasi-sop');
     Route::get('/export/template-pegawai', [ExportController::class, 'templatePegawai'])->name('export.template-pegawai');
+    Route::get('/export/hasil-impor/{token}', [ExportController::class, 'hasilImporPegawai'])->name('export.hasil-impor');
 });
