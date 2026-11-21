@@ -104,7 +104,7 @@ class KelengkapanRuanganService
             ->get();
 
         $query = Unit::query()
-            ->with(['berkasRuangans'])
+            ->with(['berkasRuangans:id,unit_id,jenis_berkas_ruangan_id,tgl_berakhir,status_verifikasi'])
             ->orderBy('nama');
 
         if ($unitId) {

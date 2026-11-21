@@ -19,6 +19,7 @@ use App\Services\KelengkapanRuanganService;
 use Filament\Widgets\StatsOverviewWidget as BaseWidget;
 use Filament\Widgets\StatsOverviewWidget\Stat;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Cache;
 
 class StatRingkasanWidget extends BaseWidget
 {
@@ -89,13 +90,21 @@ class StatRingkasanWidget extends BaseWidget
             ->url(PerpustakaanSopPage::getUrl());
 
         if ($user->canVerifyBerkas()) {
-            $menunggu = BerkasPegawai::query()
-                ->where('status_verifikasi', BerkasPegawai::STATUS_MENUNGGU)
-                ->count();
-            $mendekatiHabis = BerkasPegawai::query()
-                ->whereNotNull('tgl_berakhir')
-                ->whereDate('tgl_berakhir', '<=', now()->addDays(90)->toDateString())
-                ->count();
+            $hitungKps = static fn (): array => [
+                'menunggu' => BerkasPegawai::query()
+                    ->where('status_verifikasi', BerkasPegawai::STATUS_MENUNGGU)
+                    ->count(),
+                'mendekati_habis' => BerkasPegawai::query()
+                    ->whereNotNull('tgl_berakhir')
+                    ->whereDate('tgl_berakhir', '<=', now()->addDays(90)->toDateString())
+                    ->count(),
+            ];
+            $kpsGlobal = app()->runningUnitTests()
+                ? $hitungKps()
+                : Cache::remember('stat_ringkasan_kps_global', 60, $hitungKps);
+
+            $menunggu = $kpsGlobal['menunggu'];
+            $mendekatiHabis = $kpsGlobal['mendekati_habis'];
 
             $stats[] = Stat::make('Antrian Verifikasi KPS', (string) $menunggu)
                 ->description('Berkas pegawai menunggu pemeriksaan SDM')
@@ -109,9 +118,12 @@ class StatRingkasanWidget extends BaseWidget
         }
 
         if ($user->canVerifyBerkasRuangan()) {
-            $menungguRuangan = BerkasRuangan::query()
+            $hitungRuangan = static fn (): int => BerkasRuangan::query()
                 ->where('status_verifikasi', BerkasRuangan::STATUS_MENUNGGU)
                 ->count();
+            $menungguRuangan = app()->runningUnitTests()
+                ? $hitungRuangan()
+                : Cache::remember('stat_ringkasan_ruangan_global', 60, $hitungRuangan);
 
             $stats[] = Stat::make('Antrian Verifikasi Berkas Ruangan', (string) $menungguRuangan)
                 ->description('Berkas unit/ruangan menunggu pemeriksaan Tim Mutu')
@@ -120,8 +132,16 @@ class StatRingkasanWidget extends BaseWidget
         }
 
         if ($user->canManageDokumen()) {
-            $totalBerlaku = DokumenRs::query()->where('status', DokumenRs::STATUS_BERLAKU)->count();
-            $totalBaca = DokumenRsBaca::query()->count();
+            $hitungDokumen = static fn (): array => [
+                'total_berlaku' => DokumenRs::query()->where('status', DokumenRs::STATUS_BERLAKU)->count(),
+                'total_baca' => DokumenRsBaca::query()->count(),
+            ];
+            $dokGlobal = app()->runningUnitTests()
+                ? $hitungDokumen()
+                : Cache::remember('stat_ringkasan_dokumen_global', 60, $hitungDokumen);
+
+            $totalBerlaku = $dokGlobal['total_berlaku'];
+            $totalBaca = $dokGlobal['total_baca'];
 
             $stats[] = Stat::make('Dokumen RS Berlaku', (string) $totalBerlaku)
                 ->description('SOP, SK, Pedoman, dan Panduan aktif')

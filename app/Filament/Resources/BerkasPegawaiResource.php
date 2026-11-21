@@ -36,7 +36,14 @@ class BerkasPegawaiResource extends Resource
 
     public static function getNavigationBadge(): ?string
     {
-        $count = BerkasPegawai::query()->where('status_verifikasi', BerkasPegawai::STATUS_MENUNGGU)->count();
+        $hitung = static fn (): int => BerkasPegawai::query()
+            ->where('status_verifikasi', BerkasPegawai::STATUS_MENUNGGU)
+            ->count();
+
+        $count = app()->runningUnitTests()
+            ? $hitung()
+            : \Illuminate\Support\Facades\Cache::remember('nav_badge_berkas_pegawai', 30, $hitung);
+
         return $count > 0 ? (string) $count : null;
     }
 
@@ -47,7 +54,6 @@ class BerkasPegawaiResource extends Resource
                 ->label('Pegawai')
                 ->relationship('user', 'name')
                 ->searchable()
-                ->preload()
                 ->required()
                 ->disabledOn('edit'),
             Forms\Components\Select::make('jenis_berkas_id')

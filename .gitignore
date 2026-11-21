@@ -23,3 +23,7 @@ yarn-error.log
 /.zed
 .DS_Store
 /storage/logs/*.log
+
+# Jangan pernah komit berkas CSV/PDF data pegawai
+*.csv
+*.pdf

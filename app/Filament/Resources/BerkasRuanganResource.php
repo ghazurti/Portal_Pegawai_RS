@@ -36,7 +36,14 @@ class BerkasRuanganResource extends Resource
 
     public static function getNavigationBadge(): ?string
     {
-        $count = BerkasRuangan::query()->where('status_verifikasi', BerkasRuangan::STATUS_MENUNGGU)->count();
+        $hitung = static fn (): int => BerkasRuangan::query()
+            ->where('status_verifikasi', BerkasRuangan::STATUS_MENUNGGU)
+            ->count();
+
+        $count = app()->runningUnitTests()
+            ? $hitung()
+            : \Illuminate\Support\Facades\Cache::remember('nav_badge_berkas_ruangan', 30, $hitung);
+
         return $count > 0 ? (string) $count : null;
     }
 

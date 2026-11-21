@@ -59,3 +59,25 @@ php artisan test
 | Kepala Ruangan Ranap | `karu.ranap` / `KARU_RANAP` | `karu.ranap@rs.local` | `password` |
 | Kepala Ruangan NICU | `karu.nicu` / `KARU_NICU` | `karu.nicu@rs.local` | `password` |
 | Pegawai (Perawat) | `perawat` / `199205142019032001` | `perawat@rs.local` | `password` |
+
+## Deploy & Optimasi Produksi (Hostinger / VPS)
+
+Agar tetap cepat untuk 700–1.000+ pegawai di shared hosting (seperti Hostinger):
+
+1. **Pengaturan `.env` produksi:**
+   - `APP_ENV=production`
+   - `APP_DEBUG=false`
+   - `SESSION_DRIVER=file` (atau `redis` jika tersedia)
+   - `CACHE_STORE=file` (atau `redis` jika tersedia)
+   - `SESSION_SECURE_COOKIE=true` (jika menggunakan HTTPS)
+2. **Perintah wajib setiap kali deploy / `git pull`:**
+   ```bash
+   composer install --no-dev --optimize-autoloader
+   php artisan migrate --force
+   php artisan optimize
+   php artisan filament:optimize
+   ```
+3. **PHP Options di hPanel Hostinger:**
+   - Aktifkan ekstensi **OPcache** (`opcache`), **intl**, **pdo_mysql**, **fileinfo**, dan **zip**.
+   - Atur `memory_limit >= 256M`, `upload_max_filesize = 20M`, `post_max_size = 25M`.
+

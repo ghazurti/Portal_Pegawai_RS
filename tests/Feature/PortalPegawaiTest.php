@@ -688,4 +688,36 @@ class PortalPegawaiTest extends TestCase
         $this->assertEquals('198801012015012009', $contohFresh->nip);
         $this->assertEquals('081299887766', $contohFresh->no_hp);
     }
+
+    public function test_rekap_kelengkapan_kps_mendukung_paginasi_dan_ringkasan_agregat(): void
+    {
+        $sdm = User::where('email', 'sdm@rs.local')->firstOrFail();
+        $unit = Unit::firstOrFail();
+
+        for ($i = 1; $i <= 12; $i++) {
+            User::create([
+                'name' => sprintf('Pegawai Uji Paginasi %02d', $i),
+                'email' => "paginasi.{$i}@rs.local",
+                'password' => bcrypt('Rahasia123!'),
+                'role' => User::ROLE_PEGAWAI,
+                'unit_id' => $unit->id,
+                'aktif' => true,
+            ]);
+        }
+
+        $service = app(\App\Services\KelengkapanKpsService::class);
+        $paginator = $service->rekapPegawaiPaginated(null, null, 'Pegawai Uji Paginasi', 10);
+        $agregat = $service->ringkasanAgregatKps(null, null, 'Pegawai Uji Paginasi');
+
+        $this->assertEquals(12, $paginator->total());
+        $this->assertCount(10, $paginator->items());
+        $this->assertEquals(12, $agregat['total_pegawai']);
+
+        Livewire::actingAs($sdm)
+            ->test(\App\Filament\Pages\RekapKelengkapanKpsPage::class)
+            ->set('cari', 'Pegawai Uji Paginasi')
+            ->set('perPage', 10)
+            ->assertSee('Pegawai Uji Paginasi 01')
+            ->assertDontSee('Pegawai Uji Paginasi 12');
+    }
 }

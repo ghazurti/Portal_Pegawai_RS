@@ -5,7 +5,10 @@ namespace App\Services;
 use App\Models\BerkasPegawai;
 use App\Models\JenisBerkas;
 use App\Models\User;
+use Illuminate\Contracts\Pagination\LengthAwarePaginator;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Cache;
 
 class KelengkapanKpsService
 {
@@ -92,19 +95,21 @@ class KelengkapanKpsService
     }
 
     /**
-     * @return Collection<int, array{user: User, ringkasan: array}>
+     * @return Collection<int, JenisBerkas>
      */
-    public function rekapSemuaPegawai(?int $unitId = null, ?int $profesiId = null, string $cari = ''): Collection
+    protected function jenisBerkasAktif(): Collection
     {
-        $jenisAktif = JenisBerkas::query()
+        return JenisBerkas::query()
             ->with('kategoriProfesis:id')
             ->where('aktif', true)
             ->orderBy('urutan')
             ->orderBy('nama')
             ->get();
+    }
 
+    protected function queryPegawaiAktif(?int $unitId = null, ?int $profesiId = null, string $cari = ''): Builder
+    {
         $query = User::query()
-            ->with(['unit:id,kode,nama', 'kategoriProfesi:id,kode,nama', 'berkasPegawais'])
             ->where('aktif', true)
             ->orderBy('name');
 
@@ -116,18 +121,116 @@ class KelengkapanKpsService
         }
         $term = trim($cari);
         if ($term !== '') {
-            $query->where(function ($q) use ($term) {
+            $query->where(function (Builder $q) use ($term) {
                 $q->where('name', 'like', "%{$term}%")
                     ->orWhere('nip', 'like', "%{$term}%")
                     ->orWhere('jabatan', 'like', "%{$term}%");
             });
         }
 
-        return $query->get()->map(function (User $u) use ($jenisAktif) {
+        return $query;
+    }
+
+    /**
+     * @return Collection<int, array{user: User, ringkasan: array}>
+     */
+    public function rekapSemuaPegawai(?int $unitId = null, ?int $profesiId = null, string $cari = ''): Collection
+    {
+        $jenisAktif = $this->jenisBerkasAktif();
+
+        return $this->queryPegawaiAktif($unitId, $profesiId, $cari)
+            ->with([
+                'unit:id,kode,nama',
+                'kategoriProfesi:id,kode,nama',
+                'berkasPegawais:id,user_id,jenis_berkas_id,tgl_berakhir,status_verifikasi',
+            ])
+            ->get()
+            ->map(function (User $u) use ($jenisAktif) {
+                return [
+                    'user' => $u,
+                    'ringkasan' => $this->ringkasanUntukUser($u, $jenisAktif),
+                ];
+            });
+    }
+
+    public function rekapPegawaiPaginated(
+        ?int $unitId = null,
+        ?int $profesiId = null,
+        string $cari = '',
+        int $perPage = 25
+    ): LengthAwarePaginator {
+        $jenisAktif = $this->jenisBerkasAktif();
+
+        $paginator = $this->queryPegawaiAktif($unitId, $profesiId, $cari)
+            ->with([
+                'unit:id,kode,nama',
+                'kategoriProfesi:id,kode,nama',
+                'berkasPegawais:id,user_id,jenis_berkas_id,tgl_berakhir,status_verifikasi',
+            ])
+            ->paginate($perPage);
+
+        $paginator->through(function (User $u) use ($jenisAktif) {
             return [
                 'user' => $u,
                 'ringkasan' => $this->ringkasanUntukUser($u, $jenisAktif),
             ];
         });
+
+        return $paginator;
+    }
+
+    /**
+     * @return array{total_pegawai: int, rata_persen: float, lengkap_seratus: int, perlu_perhatian: int}
+     */
+    public function ringkasanAgregatKps(?int $unitId = null, ?int $profesiId = null, string $cari = ''): array
+    {
+        $hitung = function () use ($unitId, $profesiId, $cari): array {
+            $jenisAktif = $this->jenisBerkasAktif();
+
+            $users = $this->queryPegawaiAktif($unitId, $profesiId, $cari)
+                ->select(['id', 'kategori_profesi_id'])
+                ->with(['berkasPegawais:id,user_id,jenis_berkas_id,tgl_berakhir,status_verifikasi'])
+                ->get();
+
+            $total = $users->count();
+            if ($total === 0) {
+                return [
+                    'total_pegawai' => 0,
+                    'rata_persen' => 0.0,
+                    'lengkap_seratus' => 0,
+                    'perlu_perhatian' => 0,
+                ];
+            }
+
+            $jumlahPersen = 0.0;
+            $lengkapSeratus = 0;
+            $perluPerhatian = 0;
+
+            foreach ($users as $u) {
+                $r = $this->ringkasanUntukUser($u, $jenisAktif);
+                $jumlahPersen += $r['persen'];
+                if ($r['persen'] >= 100.0) {
+                    $lengkapSeratus++;
+                }
+                if ($r['kedaluwarsa'] > 0 || $r['ditolak'] > 0 || $r['hampir_habis'] > 0) {
+                    $perluPerhatian++;
+                }
+            }
+
+            return [
+                'total_pegawai' => $total,
+                'rata_persen' => round($jumlahPersen / $total, 1),
+                'lengkap_seratus' => $lengkapSeratus,
+                'perlu_perhatian' => $perluPerhatian,
+            ];
+        };
+
+        if (app()->runningUnitTests()) {
+            return $hitung();
+        }
+
+        $cacheKey = 'rekap_kps_agregat:' . ($unitId ?: 'all') . ':' . ($profesiId ?: 'all') . ':' . md5(mb_strtolower(trim($cari)));
+
+        return Cache::remember($cacheKey, 60, $hitung);
     }
 }

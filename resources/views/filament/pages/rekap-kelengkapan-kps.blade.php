@@ -12,12 +12,12 @@
             </x-filament::button>
         </div>
 
-        <div class="mt-4 grid grid-cols-1 gap-3 md:grid-cols-3">
+        <div class="mt-4 grid grid-cols-1 gap-3 md:grid-cols-4">
             <div>
                 <label class="mb-1 block text-xs font-medium text-gray-700 dark:text-gray-300">Cari Nama / NIP / Jabatan</label>
                 <input
                     type="text"
-                    wire:model.live.debounce.300ms="cari"
+                    wire:model.live.debounce.500ms="cari"
                     placeholder="Ketik NIP atau nama pegawai..."
                     class="w-full rounded-lg border-gray-300 text-sm shadow-sm focus:border-teal-600 focus:ring-teal-600 dark:border-gray-700 dark:bg-gray-900 dark:text-white"
                 />
@@ -50,6 +50,17 @@
                     @foreach ($profesis as $pr)
                         <option value="{{ $pr->id }}">{{ $pr->nama }}</option>
                     @endforeach
+                </select>
+            </div>
+            <div>
+                <label class="mb-1 block text-xs font-medium text-gray-700 dark:text-gray-300">Baris per Halaman</label>
+                <select
+                    wire:model.live="perPage"
+                    class="w-full rounded-lg border-gray-300 text-sm shadow-sm focus:border-teal-600 focus:ring-teal-600 dark:border-gray-700 dark:bg-gray-900 dark:text-white"
+                >
+                    <option value="25">25 pegawai</option>
+                    <option value="50">50 pegawai</option>
+                    <option value="100">100 pegawai</option>
                 </select>
             </div>
         </div>
@@ -107,6 +118,17 @@
                         @endforeach
                     </tbody>
                 </table>
+            </div>
+
+            <div class="mt-4 flex flex-col gap-3 border-t border-gray-200 pt-3 text-xs text-gray-600 dark:border-gray-700 dark:text-gray-400 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                    Menampilkan <strong>{{ $paginator->firstItem() }}</strong>–<strong>{{ $paginator->lastItem() }}</strong> dari <strong>{{ $paginator->total() }}</strong> pegawai
+                </div>
+                @if ($paginator->hasPages())
+                    <div>
+                        {{ $paginator->links() }}
+                    </div>
+                @endif
             </div>
         @endif
     </x-filament::section>

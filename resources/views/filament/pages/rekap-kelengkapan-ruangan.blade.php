@@ -16,7 +16,7 @@
             <label class="mb-1 block text-xs font-medium text-gray-700 dark:text-gray-300">Cari Unit / Ruangan / Bidang</label>
             <input
                 type="text"
-                wire:model.live.debounce.300ms="cari"
+                wire:model.live.debounce.500ms="cari"
                 placeholder="Contoh: RANAP atau Instalasi Gawat Darurat"
                 class="w-full rounded-lg border-gray-300 text-sm shadow-sm focus:border-teal-600 focus:ring-teal-600 dark:border-gray-700 dark:bg-gray-900 dark:text-white"
             />
