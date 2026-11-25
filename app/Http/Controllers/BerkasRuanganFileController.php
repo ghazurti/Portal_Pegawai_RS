@@ -20,6 +20,7 @@ class BerkasRuanganFileController extends Controller
         $boleh = $user && (
             $user->canVerifyBerkasRuangan()
             || ($user->unit_id && $user->unit_id === $berkasRuangan->unit_id)
+            || ($user->isPengawasBidang() && in_array($berkasRuangan->unit_id, $user->unitIdsDalamCakupan() ?? [], true))
         );
         abort_unless($boleh, 403);
 

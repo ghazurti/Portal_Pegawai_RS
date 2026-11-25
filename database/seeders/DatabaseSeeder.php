@@ -29,7 +29,8 @@ class DatabaseSeeder extends Seeder
             ['kode' => 'RALAN', 'nama' => 'Instalasi Rawat Jalan', 'bidang' => 'Pelayanan Medis'],
             ['kode' => 'FARMASI', 'nama' => 'Instalasi Farmasi', 'bidang' => 'Penunjang Medis'],
             ['kode' => 'RM', 'nama' => 'Instalasi Rekam Medis', 'bidang' => 'Penunjang'],
-            ['kode' => 'SDM', 'nama' => 'Bagian Kepegawaian & KPS', 'bidang' => 'Administrasi'],
+            ['kode' => 'SDM', 'nama' => 'Subbag Kepegawaian / SDM', 'bidang' => 'Tata Usaha'],
+            ['kode' => 'TU', 'nama' => 'Subbag Umum, Keuangan & Perencanaan', 'bidang' => 'Tata Usaha'],
             ['kode' => 'MUTU', 'nama' => 'Komite Mutu & Keselamatan Pasien', 'bidang' => 'Mutu'],
             ['kode' => 'IT', 'nama' => 'Instalasi SIMRS / IT', 'bidang' => 'Teknologi Informasi'],
         ];
@@ -191,6 +192,7 @@ class DatabaseSeeder extends Seeder
             'name' => 'Ns. Rina Maharani, S.Kep',
             'password' => $pw,
             'role' => User::ROLE_PEGAWAI,
+            'status_kepegawaian' => User::STATUS_PPPK_FULL,
             'unit_id' => $units['RANAP']->id,
             'kategori_profesi_id' => $profesis['PRW']->id,
             'jabatan' => 'Perawat Pelaksana Rawat Inap',
@@ -203,10 +205,52 @@ class DatabaseSeeder extends Seeder
             'name' => 'dr. Andi Pratama',
             'password' => $pw,
             'role' => User::ROLE_PEGAWAI,
+            'status_kepegawaian' => User::STATUS_PNS,
             'unit_id' => $units['IGD']->id,
             'kategori_profesi_id' => $profesis['DR_UM']->id,
             'jabatan' => 'Dokter Jaga IGD',
             'no_hp' => '081300000005',
+            'aktif' => true,
+        ]);
+
+        User::updateOrCreate(['email' => 'kabid.keperawatan@rs.local'], [
+            'nip' => 'KABID_KEP',
+            'name' => 'Kepala Bidang Keperawatan',
+            'password' => $pw,
+            'role' => User::ROLE_KABID,
+            'status_kepegawaian' => User::STATUS_PNS,
+            'unit_id' => $units['RANAP']->id,
+            'bidang_kelola' => 'Keperawatan',
+            'kategori_profesi_id' => $profesis['PRW']->id,
+            'jabatan' => 'Kepala Bidang Keperawatan',
+            'no_hp' => '081200000020',
+            'aktif' => true,
+        ]);
+
+        User::updateOrCreate(['email' => 'tu@rs.local'], [
+            'nip' => 'TU001',
+            'name' => 'Kepala Bagian Tata Usaha',
+            'password' => $pw,
+            'role' => User::ROLE_TU,
+            'status_kepegawaian' => User::STATUS_PNS,
+            'unit_id' => $units['TU']->id,
+            'bidang_kelola' => 'Tata Usaha',
+            'kategori_profesi_id' => $profesis['NON']->id,
+            'jabatan' => 'Kepala Bagian Tata Usaha (Kabag TU)',
+            'no_hp' => '081200000021',
+            'aktif' => true,
+        ]);
+
+        User::updateOrCreate(['email' => 'direktur@rs.local'], [
+            'nip' => 'DIR001',
+            'name' => 'Direktur RSUD',
+            'password' => $pw,
+            'role' => User::ROLE_DIREKTUR,
+            'status_kepegawaian' => User::STATUS_PNS,
+            'unit_id' => $units['TU']->id,
+            'kategori_profesi_id' => $profesis['DR_SP']->id,
+            'jabatan' => 'Direktur RSUD',
+            'no_hp' => '081200000099',
             'aktif' => true,
         ]);
 

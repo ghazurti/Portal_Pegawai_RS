@@ -21,10 +21,15 @@ class ExportController extends Controller
         $user = Auth::user();
         abort_unless($user && $user->canMonitorUnitKps(), 403);
 
+        $allowedUnitIds = $user->unitIdsDalamCakupan();
         $unitId = $user->isKepalaRuangan() ? $user->unit_id : ($request->integer('unit_id') ?: null);
+        if ($allowedUnitIds !== null && $unitId !== null && ! in_array($unitId, $allowedUnitIds, true)) {
+            $unitId = null;
+        }
         $profesiId = $request->integer('profesi_id') ?: null;
+        $statusKepegawaian = trim((string) $request->string('status_kepegawaian')) ?: null;
         $cari = (string) $request->string('cari');
-        $rows = $service->rekapSemuaPegawai($unitId, $profesiId, $cari);
+        $rows = $service->rekapSemuaPegawai($unitId, $profesiId, $cari, $statusKepegawaian, $allowedUnitIds);
 
         $filename = 'Rekap_Kelengkapan_Berkas_KPS_' . now()->format('Ymd_His') . '.csv';
 
@@ -35,6 +40,7 @@ class ExportController extends Controller
             $this->writeCsvRow($out, [
                 'NIP',
                 'Nama Pegawai',
+                'Status Kepegawaian',
                 'Jabatan',
                 'Profesi',
                 'Unit',
@@ -55,6 +61,7 @@ class ExportController extends Controller
                 $this->writeCsvRow($out, [
                     $p->nip ?: '-',
                     $p->name,
+                    $p->labelStatusKepegawaian(),
                     $p->jabatan ?: '-',
                     $p->kategoriProfesi?->nama ?: '-',
                     $p->unit?->nama ?: '-',
@@ -75,11 +82,15 @@ class ExportController extends Controller
     {
         /** @var User $user */
         $user = Auth::user();
-        abort_unless($user && ($user->canVerifyBerkasRuangan() || $user->isKepalaRuangan()), 403);
+        abort_unless($user && ($user->canMonitorRuangan() || $user->isKepalaRuangan()), 403);
 
+        $allowedUnitIds = $user->unitIdsDalamCakupan();
         $unitId = $user->isKepalaRuangan() ? $user->unit_id : ($request->integer('unit_id') ?: null);
+        if ($allowedUnitIds !== null && $unitId !== null && ! in_array($unitId, $allowedUnitIds, true)) {
+            $unitId = null;
+        }
         $cari = (string) $request->string('cari');
-        $rows = $service->rekapSemuaUnit($unitId, $cari);
+        $rows = $service->rekapSemuaUnit($unitId, $cari, $allowedUnitIds);
 
         $filename = 'Rekap_Kelengkapan_Berkas_Ruangan_' . now()->format('Ymd_His') . '.csv';
 
@@ -165,7 +176,7 @@ class ExportController extends Controller
         abort_unless($user && $user->canVerifyBerkas(), 403);
 
         return $this->streamCsv('Template_Impor_Pegawai.csv', function ($out) {
-            $this->writeCsvRow($out, ['nip', 'nama', 'email', 'jabatan', 'kode_unit', 'nama_unit', 'kode_profesi', 'no_hp', 'role']);
+            $this->writeCsvRow($out, ['nip', 'nama', 'email', 'jabatan', 'kode_unit', 'nama_unit', 'kode_profesi', 'status_kepegawaian', 'no_hp', 'role']);
         });
     }
 

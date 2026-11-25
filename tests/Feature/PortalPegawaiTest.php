@@ -720,4 +720,108 @@ class PortalPegawaiTest extends TestCase
             ->assertSee('Pegawai Uji Paginasi 01')
             ->assertDontSee('Pegawai Uji Paginasi 12');
     }
+
+    public function test_pemisahan_status_kepegawaian_dan_syarat_berkas_wajib(): void
+    {
+        $unit = Unit::where('kode', 'RANAP')->firstOrFail();
+        $profesi = \App\Models\KategoriProfesi::where('kode', 'NON')->firstOrFail();
+
+        $skAsn = JenisBerkas::create([
+            'kode' => 'SK_ASN_UJI',
+            'nama' => 'SK Pengangkatan ASN Penuh Waktu',
+            'wajib_semua' => true,
+            'status_kepegawaian_wajib' => [User::STATUS_PNS, User::STATUS_PPPK_FULL],
+            'aktif' => true,
+        ]);
+        $skParuh = JenisBerkas::create([
+            'kode' => 'SK_PPPK_PW_UJI',
+            'nama' => 'SK PPPK Paruh Waktu',
+            'wajib_semua' => true,
+            'status_kepegawaian_wajib' => [User::STATUS_PPPK_PARUH],
+            'aktif' => true,
+        ]);
+        $skKontrak = JenisBerkas::create([
+            'kode' => 'SK_KONTRAK_UJI',
+            'nama' => 'SK Pegawai Kontrak BLUD',
+            'wajib_semua' => true,
+            'status_kepegawaian_wajib' => [User::STATUS_KONTRAK],
+            'aktif' => true,
+        ]);
+
+        $pns = User::create(['name' => 'Uji PNS', 'email' => 'uji.pns@rs.local', 'password' => bcrypt('Rahasia123!'), 'role' => User::ROLE_PEGAWAI, 'status_kepegawaian' => User::STATUS_PNS, 'unit_id' => $unit->id, 'kategori_profesi_id' => $profesi->id, 'aktif' => true]);
+        $pppkFull = User::create(['name' => 'Uji PPPK Full', 'email' => 'uji.pppkfull@rs.local', 'password' => bcrypt('Rahasia123!'), 'role' => User::ROLE_PEGAWAI, 'status_kepegawaian' => User::STATUS_PPPK_FULL, 'unit_id' => $unit->id, 'kategori_profesi_id' => $profesi->id, 'aktif' => true]);
+        $pppkParuh = User::create(['name' => 'Uji PPPK Paruh', 'email' => 'uji.pppkparuh@rs.local', 'password' => bcrypt('Rahasia123!'), 'role' => User::ROLE_PEGAWAI, 'status_kepegawaian' => User::STATUS_PPPK_PARUH, 'unit_id' => $unit->id, 'kategori_profesi_id' => $profesi->id, 'aktif' => true]);
+        $kontrak = User::create(['name' => 'Uji Kontrak', 'email' => 'uji.kontrak@rs.local', 'password' => bcrypt('Rahasia123!'), 'role' => User::ROLE_PEGAWAI, 'status_kepegawaian' => User::STATUS_KONTRAK, 'unit_id' => $unit->id, 'kategori_profesi_id' => $profesi->id, 'aktif' => true]);
+
+        $this->assertTrue($pns->jenisBerkasWajib()->contains('id', $skAsn->id));
+        $this->assertFalse($pns->jenisBerkasWajib()->contains('id', $skParuh->id));
+        $this->assertFalse($pns->jenisBerkasWajib()->contains('id', $skKontrak->id));
+
+        $this->assertTrue($pppkFull->jenisBerkasWajib()->contains('id', $skAsn->id));
+        $this->assertFalse($pppkFull->jenisBerkasWajib()->contains('id', $skParuh->id));
+
+        $this->assertTrue($pppkParuh->jenisBerkasWajib()->contains('id', $skParuh->id));
+        $this->assertFalse($pppkParuh->jenisBerkasWajib()->contains('id', $skAsn->id));
+
+        $this->assertTrue($kontrak->jenisBerkasWajib()->contains('id', $skKontrak->id));
+        $this->assertFalse($kontrak->jenisBerkasWajib()->contains('id', $skAsn->id));
+
+        $service = app(\App\Services\KelengkapanKpsService::class);
+        $asnGroup = $service->rekapSemuaPegawai(null, null, 'Uji ', User::KELOMPOK_ASN_PENUH);
+        $this->assertCount(2, $asnGroup);
+        $this->assertCount(1, $service->rekapSemuaPegawai(null, null, 'Uji ', User::STATUS_PPPK_PARUH));
+        $this->assertCount(1, $service->rekapSemuaPegawai(null, null, 'Uji ', User::STATUS_KONTRAK));
+    }
+
+    public function test_pemisahan_peran_kabid_tu_dan_kepegawaian(): void
+    {
+        $kabid = User::where('email', 'kabid.keperawatan@rs.local')->firstOrFail();
+        $tu = User::where('email', 'tu@rs.local')->firstOrFail();
+        $sdm = User::where('email', 'sdm@rs.local')->firstOrFail();
+
+        // Pemisahan otorisasi: hanya Kepegawaian/SDM (dan Admin) yang verifikasi KPS
+        $this->assertTrue($sdm->canVerifyBerkas());
+        $this->assertFalse($kabid->canVerifyBerkas());
+        $this->assertFalse($tu->canVerifyBerkas());
+
+        // Tata Usaha dapat mengelola dokumen RS, Kabid tidak mengelola SOP umum
+        $this->assertTrue($tu->canManageDokumen());
+        $this->assertFalse($kabid->canManageDokumen());
+        $this->assertFalse($sdm->canManageDokumen());
+
+        // Kabid & TU bisa memantau KPS dan Kelengkapan Ruangan sesuai bidang masing-masing
+        $this->assertTrue($kabid->canMonitorUnitKps());
+        $this->assertTrue($kabid->canMonitorRuangan());
+        $this->assertTrue($tu->canMonitorUnitKps());
+        $this->assertTrue($tu->canMonitorRuangan());
+
+        $ranap = Unit::where('kode', 'RANAP')->firstOrFail();
+        $nicu = Unit::where('kode', 'NICU')->firstOrFail();
+        $igd = Unit::where('kode', 'IGD')->firstOrFail();
+
+        $kabidUnits = $kabid->unitIdsDalamCakupan();
+        $this->assertContains($ranap->id, $kabidUnits);
+        $this->assertContains($nicu->id, $kabidUnits);
+        $this->assertNotContains($igd->id, $kabidUnits);
+
+        // Rekap KPS Kabid hanya menampilkan pegawai di bidang Keperawatan
+        $service = app(\App\Services\KelengkapanKpsService::class);
+        $rekapKabid = $service->rekapSemuaPegawai(null, null, '', null, $kabidUnits);
+        $this->assertTrue($rekapKabid->every(fn ($row) => in_array($row['user']->unit_id, $kabidUnits, true)));
+
+        // Kabag TU membawahi Subbag Kepegawaian (SDM) dan Subbag Umum/Keuangan/Perencanaan (TU)
+        $sdmUnit = Unit::where('kode', 'SDM')->firstOrFail();
+        $tuUnit = Unit::where('kode', 'TU')->firstOrFail();
+        $tuUnits = $tu->unitIdsDalamCakupan();
+        $this->assertContains($sdmUnit->id, $tuUnits);
+        $this->assertContains($tuUnit->id, $tuUnits);
+        $this->assertNotContains($igd->id, $tuUnits);
+
+        // Direktur RSUD dapat memantau seluruh unit (read-only eksekutif)
+        $direktur = User::where('email', 'direktur@rs.local')->firstOrFail();
+        $this->assertNull($direktur->unitIdsDalamCakupan());
+        $this->assertTrue($direktur->canMonitorUnitKps());
+        $this->assertTrue($direktur->canMonitorRuangan());
+        $this->assertFalse($direktur->canVerifyBerkas());
+    }
 }

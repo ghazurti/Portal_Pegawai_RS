@@ -67,6 +67,12 @@ class JenisBerkasResource extends Resource
                 ->preload()
                 ->helperText('Kosongkan jika sudah dicentang "Wajib untuk semua pegawai".')
                 ->columnSpanFull(),
+            Forms\Components\CheckboxList::make('status_kepegawaian_wajib')
+                ->label('Wajib untuk Status Kepegawaian Tertentu')
+                ->options(User::STATUS_KEPEGAWAIAN)
+                ->columns(2)
+                ->helperText('Kosongkan jika berlaku untuk semua status kepegawaian (PNS, PPPK Penuh/Paruh Waktu, Kontrak).')
+                ->columnSpanFull(),
             Forms\Components\Textarea::make('keterangan')
                 ->label('Keterangan')
                 ->rows(2)
@@ -83,6 +89,17 @@ class JenisBerkasResource extends Resource
                 Tables\Columns\TextColumn::make('nama')->label('Jenis Berkas')->sortable()->searchable(),
                 Tables\Columns\IconColumn::make('wajib_semua')->label('Semua')->boolean(),
                 Tables\Columns\TextColumn::make('kategoriProfesis.nama')->label('Profesi Wajib')->badge()->separator(', '),
+                Tables\Columns\TextColumn::make('status_kepegawaian_wajib')
+                    ->label('Status Wajib')
+                    ->badge()
+                    ->formatStateUsing(function ($state): string {
+                        if (empty($state)) {
+                            return 'Semua Status';
+                        }
+                        $items = is_array($state) ? $state : [$state];
+                        return collect($items)->map(fn ($s) => User::STATUS_KEPEGAWAIAN[$s] ?? $s)->implode(', ');
+                    })
+                    ->placeholder('Semua Status'),
                 Tables\Columns\IconColumn::make('memiliki_masa_berlaku')->label('Masa Berlaku')->boolean(),
                 Tables\Columns\IconColumn::make('boleh_banyak')->label('Multi')->boolean(),
                 Tables\Columns\IconColumn::make('aktif')->label('Aktif')->boolean(),

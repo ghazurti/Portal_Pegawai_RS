@@ -132,6 +132,7 @@ class PegawaiCsvImportService
                 'kategori_profesi_id' => $kodeProfesi !== '' ? $profesis->get($kodeProfesi)?->id : null,
                 'no_hp' => ($row['no_hp'] ?? '') !== '' ? $row['no_hp'] : null,
                 'role' => $role,
+                'status_kepegawaian' => User::normalisasiStatusKepegawaian($row['status_kepegawaian'] ?? ($row['status'] ?? null)) ?? $user?->status_kepegawaian,
                 'aktif' => true,
             ];
 

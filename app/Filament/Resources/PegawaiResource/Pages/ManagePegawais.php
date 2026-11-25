@@ -10,7 +10,9 @@ use Filament\Actions;
 use Filament\Forms\Components\FileUpload;
 use Filament\Notifications\Actions\Action as NotificationAction;
 use Filament\Notifications\Notification;
+use Filament\Resources\Components\Tab;
 use Filament\Resources\Pages\ManageRecords;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
@@ -18,6 +20,31 @@ use Illuminate\Support\Str;
 class ManagePegawais extends ManageRecords
 {
     protected static string $resource = PegawaiResource::class;
+
+
+    public function getTabs(): array
+    {
+        return [
+            'semua' => Tab::make('Semua')
+                ->badge(fn () => User::query()->count()),
+            'asn_penuh' => Tab::make('PNS & PPPK Penuh Waktu')
+                ->badge(fn () => User::query()->whereIn('status_kepegawaian', User::STATUS_ASN_PENUH)->count())
+                ->badgeColor('success')
+                ->modifyQueryUsing(fn (Builder $query) => $query->whereIn('status_kepegawaian', User::STATUS_ASN_PENUH)),
+            'pppk_paruh' => Tab::make('PPPK Paruh Waktu')
+                ->badge(fn () => User::query()->where('status_kepegawaian', User::STATUS_PPPK_PARUH)->count())
+                ->badgeColor('warning')
+                ->modifyQueryUsing(fn (Builder $query) => $query->where('status_kepegawaian', User::STATUS_PPPK_PARUH)),
+            'kontrak' => Tab::make('Pegawai Kontrak')
+                ->badge(fn () => User::query()->where('status_kepegawaian', User::STATUS_KONTRAK)->count())
+                ->badgeColor('gray')
+                ->modifyQueryUsing(fn (Builder $query) => $query->where('status_kepegawaian', User::STATUS_KONTRAK)),
+            'belum_diatur' => Tab::make('Belum Diatur')
+                ->badge(fn () => User::query()->whereNull('status_kepegawaian')->count())
+                ->badgeColor('danger')
+                ->modifyQueryUsing(fn (Builder $query) => $query->whereNull('status_kepegawaian')),
+        ];
+    }
 
     protected function getHeaderActions(): array
     {
@@ -30,7 +57,7 @@ class ManagePegawais extends ManageRecords
                 ->label('Impor CSV Pegawai')
                 ->color('info')
                 ->modalHeading('Impor Data Pegawai dari CSV')
-                ->modalDescription('Format kolom: nip;nama;email;jabatan;kode_unit;nama_unit;kode_profesi;no_hp;role. Unit baru dibuat otomatis; pegawai baru wajib ganti sandi saat login pertama.')
+                ->modalDescription('Format kolom: nip;nama;email;jabatan;kode_unit;nama_unit;kode_profesi;status_kepegawaian;no_hp;role. Unit baru dibuat otomatis; pegawai baru wajib ganti sandi saat login pertama.')
                 ->form([
                     FileUpload::make('csv_file')
                         ->label('File CSV (.csv, maks. 2 MB)')

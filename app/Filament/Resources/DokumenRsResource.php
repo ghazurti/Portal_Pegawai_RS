@@ -30,6 +30,20 @@ class DokumenRsResource extends Resource
     protected static ?string $slug = 'dokumen-rs';
     protected static ?int $navigationSort = 1;
 
+    public static function canCreate(): bool
+    {
+        /** @var User|null $user */
+        $user = Auth::user();
+        return (bool) ($user && ($user->canManageDokumen() || $user->isKepalaRuangan()));
+    }
+
+    public static function canEdit(\Illuminate\Database\Eloquent\Model $record): bool
+    {
+        /** @var User|null $user */
+        $user = Auth::user();
+        return (bool) ($user && ($user->canManageDokumen() || $user->isKepalaRuangan()));
+    }
+
     public static function canAccess(): bool
     {
         /** @var User|null $user */
@@ -44,6 +58,9 @@ class DokumenRsResource extends Resource
         $user = Auth::user();
         if ($user && $user->isKepalaRuangan()) {
             $query->where('unit_pemilik_id', $user->unit_id ?? 0);
+        } elseif ($user && $user->isKepalaBidang()) {
+            $unitIds = $user->unitIdsDalamCakupan() ?? [];
+            $query->whereIn('unit_pemilik_id', $unitIds === [] ? [0] : $unitIds);
         }
         return $query;
     }

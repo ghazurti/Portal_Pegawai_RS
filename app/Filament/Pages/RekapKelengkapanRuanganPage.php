@@ -24,12 +24,14 @@ class RekapKelengkapanRuanganPage extends Page
     {
         /** @var User|null $user */
         $user = Auth::user();
-        return (bool) $user?->canVerifyBerkasRuangan();
+        return (bool) $user?->canMonitorRuangan();
     }
 
     public function getViewData(): array
     {
-        $rows = app(KelengkapanRuanganService::class)->rekapSemuaUnit(null, $this->cari);
+        /** @var User $user */
+        $user = Auth::user()->loadMissing('unit');
+        $rows = app(KelengkapanRuanganService::class)->rekapSemuaUnit(null, $this->cari, $user->unitIdsDalamCakupan());
 
         $totalUnit = $rows->count();
         $rataPersen = $totalUnit > 0 ? round($rows->avg(fn ($r) => $r['ringkasan']['persen']), 1) : 0.0;

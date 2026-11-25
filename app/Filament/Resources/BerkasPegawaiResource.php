@@ -95,6 +95,11 @@ class BerkasPegawaiResource extends Resource
         return $table
             ->modifyQueryUsing(fn (Builder $query) => $query->with(['user.unit', 'user.kategoriProfesi', 'jenisBerkas', 'verifikator']))
             ->defaultSort('updated_at', 'desc')
+            ->groups([
+                Tables\Grouping\Group::make('user.name')->label('Per Pegawai')->collapsible(),
+                Tables\Grouping\Group::make('jenisBerkas.nama')->label('Per Jenis Berkas')->collapsible(),
+                Tables\Grouping\Group::make('user.unit.nama')->label('Per Unit')->collapsible(),
+            ])
             ->columns([
                 Tables\Columns\TextColumn::make('user.name')
                     ->label('Pegawai')
@@ -166,6 +171,22 @@ class BerkasPegawaiResource extends Resource
                 Tables\Filters\SelectFilter::make('unit_pegawai')
                     ->label('Unit')
                     ->relationship('user.unit', 'nama'),
+                Tables\Filters\SelectFilter::make('status_kepegawaian')
+                    ->label('Status Kepegawaian')
+                    ->options([
+                        User::KELOMPOK_ASN_PENUH => 'PNS & PPPK Penuh Waktu',
+                        ...User::STATUS_KEPEGAWAIAN,
+                    ])
+                    ->query(function (Builder $query, array $data): Builder {
+                        $val = $data['value'] ?? null;
+                        if (! $val) {
+                            return $query;
+                        }
+                        if ($val === User::KELOMPOK_ASN_PENUH) {
+                            return $query->whereHas('user', fn (Builder $u) => $u->whereIn('status_kepegawaian', User::STATUS_ASN_PENUH));
+                        }
+                        return $query->whereHas('user', fn (Builder $u) => $u->where('status_kepegawaian', $val));
+                    }),
             ])
             ->actions([
                 Tables\Actions\Action::make('lihat_file')
@@ -214,6 +235,30 @@ class BerkasPegawaiResource extends Resource
                         ]);
                         ActivityLog::catat('verifikasi_tolak_berkas', $r, $r->user?->name . ' - ' . $data['catatan_verifikator']);
                         Notification::make()->title('Berkas dikembalikan untuk revisi')->warning()->send();
+                    }),
+            ])
+            ->bulkActions([
+                Tables\Actions\BulkAction::make('setujui_massal')
+                    ->label('Setujui Terpilih')
+                    ->icon('heroicon-o-check-circle')
+                    ->color('success')
+                    ->requiresConfirmation()
+                    ->deselectRecordsAfterCompletion()
+                    ->action(function (\Illuminate\Database\Eloquent\Collection $records) {
+                        $jumlah = 0;
+                        foreach ($records as $r) {
+                            if ($r->status_verifikasi !== BerkasPegawai::STATUS_DISETUJUI) {
+                                $r->update([
+                                    'status_verifikasi' => BerkasPegawai::STATUS_DISETUJUI,
+                                    'catatan_verifikator' => null,
+                                    'verified_by' => Auth::id(),
+                                    'verified_at' => now(),
+                                ]);
+                                $jumlah++;
+                            }
+                        }
+                        ActivityLog::catat('verifikasi_setujui_massal', null, "Menyetujui {$jumlah} berkas pegawai");
+                        Notification::make()->title("{$jumlah} berkas disetujui")->success()->send();
                     }),
             ]);
     }

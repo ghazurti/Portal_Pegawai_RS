@@ -25,6 +25,7 @@ class RekapKelengkapanKpsPage extends Page
 
     public string $unitId = '';
     public string $profesiId = '';
+    public string $statusKepegawaian = '';
     public string $cari = '';
     public int $perPage = 25;
 
@@ -39,6 +40,11 @@ class RekapKelengkapanKpsPage extends Page
     }
 
     public function updatedProfesiId(): void
+    {
+        $this->resetPage();
+    }
+
+    public function updatedStatusKepegawaian(): void
     {
         $this->resetPage();
     }
@@ -72,27 +78,44 @@ class RekapKelengkapanKpsPage extends Page
         /** @var User $user */
         $user = Auth::user()->loadMissing('unit');
         $khususKaru = $user->isKepalaRuangan();
+        $allowedUnitIds = $user->unitIdsDalamCakupan();
         $efektifUnitId = $khususKaru ? $user->unit_id : ($this->unitId !== '' ? (int) $this->unitId : null);
+        if ($allowedUnitIds !== null && $efektifUnitId !== null && ! in_array($efektifUnitId, $allowedUnitIds, true)) {
+            $efektifUnitId = null;
+        }
         $efektifProfesiId = $this->profesiId !== '' ? (int) $this->profesiId : null;
+        $efektifStatus = $this->statusKepegawaian !== '' ? $this->statusKepegawaian : null;
         $perPage = in_array($this->perPage, [10, 25, 50, 100], true) ? $this->perPage : 25;
 
         $service = app(KelengkapanKpsService::class);
-        $paginator = $service->rekapPegawaiPaginated($efektifUnitId, $efektifProfesiId, $this->cari, $perPage);
-        $agregat = $service->ringkasanAgregatKps($efektifUnitId, $efektifProfesiId, $this->cari);
+        $paginator = $service->rekapPegawaiPaginated($efektifUnitId, $efektifProfesiId, $this->cari, $perPage, $efektifStatus, $allowedUnitIds);
+        $agregat = $service->ringkasanAgregatKps($efektifUnitId, $efektifProfesiId, $this->cari, $efektifStatus, $allowedUnitIds);
 
         $exportUrl = route('export.rekap-kps', array_filter([
             'unit_id' => $efektifUnitId,
             'profesi_id' => $this->profesiId,
+            'status_kepegawaian' => $this->statusKepegawaian,
             'cari' => trim($this->cari),
         ]));
+
+        $unitsQuery = Unit::query()->orderBy('nama');
+        if ($allowedUnitIds !== null) {
+            $unitsQuery->whereIn('id', $allowedUnitIds === [] ? [0] : $allowedUnitIds);
+        }
 
         return [
             'paginator' => $paginator,
             'rows' => collect($paginator->items()),
-            'units' => Unit::query()->orderBy('nama')->get(['id', 'nama']),
+            'units' => $unitsQuery->get(['id', 'nama']),
             'profesis' => KategoriProfesi::query()->orderBy('nama')->get(['id', 'nama']),
+            'statusOptions' => [
+                User::KELOMPOK_ASN_PENUH => 'PNS & PPPK Penuh Waktu',
+                ...User::STATUS_KEPEGAWAIAN,
+                '__kosong__' => 'Belum Diatur',
+            ],
             'khususKaru' => $khususKaru,
             'namaUnitKaru' => $user->unit?->nama ?? '-',
+            'labelBidang' => $user->isPengawasBidang() ? ($user->bidangDipantau() ?: '-') : null,
             'totalPegawai' => $agregat['total_pegawai'],
             'rataPersen' => $agregat['rata_persen'],
             'lengkapSeratus' => $agregat['lengkap_seratus'],

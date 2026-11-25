@@ -29,13 +29,9 @@ class KelengkapanKpsService
         if ($semuaJenisAktif === null) {
             $wajibList = $user->jenisBerkasWajib();
         } else {
-            $profesiId = $user->kategori_profesi_id;
-            $wajibList = $semuaJenisAktif->filter(function (JenisBerkas $jb) use ($profesiId) {
-                if ($jb->wajib_semua) {
-                    return true;
-                }
-                return $profesiId && $jb->kategoriProfesis->contains('id', $profesiId);
-            });
+            $wajibList = $semuaJenisAktif->filter(
+                fn (JenisBerkas $jb) => $jb->wajibUntukUser($user)
+            );
         }
 
         $berkasGroups = $user->berkasPegawais->groupBy('jenis_berkas_id');
@@ -107,17 +103,42 @@ class KelengkapanKpsService
             ->get();
     }
 
-    protected function queryPegawaiAktif(?int $unitId = null, ?int $profesiId = null, string $cari = ''): Builder
-    {
+    /**
+     * @param  array<int, int>|null  $allowedUnitIds
+     */
+    protected function queryPegawaiAktif(
+        ?int $unitId = null,
+        ?int $profesiId = null,
+        string $cari = '',
+        ?string $statusKepegawaian = null,
+        ?array $allowedUnitIds = null
+    ): Builder {
         $query = User::query()
             ->where('aktif', true)
             ->orderBy('name');
+
+        if ($allowedUnitIds !== null) {
+            if ($allowedUnitIds === []) {
+                $query->whereRaw('1 = 0');
+            } else {
+                $query->whereIn('unit_id', $allowedUnitIds);
+            }
+        }
 
         if ($unitId) {
             $query->where('unit_id', $unitId);
         }
         if ($profesiId) {
             $query->where('kategori_profesi_id', $profesiId);
+        }
+        if ($statusKepegawaian !== null && $statusKepegawaian !== '') {
+            if ($statusKepegawaian === User::KELOMPOK_ASN_PENUH) {
+                $query->whereIn('status_kepegawaian', User::STATUS_ASN_PENUH);
+            } elseif ($statusKepegawaian === '__kosong__') {
+                $query->whereNull('status_kepegawaian');
+            } else {
+                $query->where('status_kepegawaian', $statusKepegawaian);
+            }
         }
         $term = trim($cari);
         if ($term !== '') {
@@ -132,15 +153,21 @@ class KelengkapanKpsService
     }
 
     /**
+     * @param  array<int, int>|null  $allowedUnitIds
      * @return Collection<int, array{user: User, ringkasan: array}>
      */
-    public function rekapSemuaPegawai(?int $unitId = null, ?int $profesiId = null, string $cari = ''): Collection
-    {
+    public function rekapSemuaPegawai(
+        ?int $unitId = null,
+        ?int $profesiId = null,
+        string $cari = '',
+        ?string $statusKepegawaian = null,
+        ?array $allowedUnitIds = null
+    ): Collection {
         $jenisAktif = $this->jenisBerkasAktif();
 
-        return $this->queryPegawaiAktif($unitId, $profesiId, $cari)
+        return $this->queryPegawaiAktif($unitId, $profesiId, $cari, $statusKepegawaian, $allowedUnitIds)
             ->with([
-                'unit:id,kode,nama',
+                'unit:id,kode,nama,bidang',
                 'kategoriProfesi:id,kode,nama',
                 'berkasPegawais:id,user_id,jenis_berkas_id,tgl_berakhir,status_verifikasi',
             ])
@@ -153,17 +180,22 @@ class KelengkapanKpsService
             });
     }
 
+    /**
+     * @param  array<int, int>|null  $allowedUnitIds
+     */
     public function rekapPegawaiPaginated(
         ?int $unitId = null,
         ?int $profesiId = null,
         string $cari = '',
-        int $perPage = 25
+        int $perPage = 25,
+        ?string $statusKepegawaian = null,
+        ?array $allowedUnitIds = null
     ): LengthAwarePaginator {
         $jenisAktif = $this->jenisBerkasAktif();
 
-        $paginator = $this->queryPegawaiAktif($unitId, $profesiId, $cari)
+        $paginator = $this->queryPegawaiAktif($unitId, $profesiId, $cari, $statusKepegawaian, $allowedUnitIds)
             ->with([
-                'unit:id,kode,nama',
+                'unit:id,kode,nama,bidang',
                 'kategoriProfesi:id,kode,nama',
                 'berkasPegawais:id,user_id,jenis_berkas_id,tgl_berakhir,status_verifikasi',
             ])
@@ -180,15 +212,21 @@ class KelengkapanKpsService
     }
 
     /**
+     * @param  array<int, int>|null  $allowedUnitIds
      * @return array{total_pegawai: int, rata_persen: float, lengkap_seratus: int, perlu_perhatian: int}
      */
-    public function ringkasanAgregatKps(?int $unitId = null, ?int $profesiId = null, string $cari = ''): array
-    {
-        $hitung = function () use ($unitId, $profesiId, $cari): array {
+    public function ringkasanAgregatKps(
+        ?int $unitId = null,
+        ?int $profesiId = null,
+        string $cari = '',
+        ?string $statusKepegawaian = null,
+        ?array $allowedUnitIds = null
+    ): array {
+        $hitung = function () use ($unitId, $profesiId, $cari, $statusKepegawaian, $allowedUnitIds): array {
             $jenisAktif = $this->jenisBerkasAktif();
 
-            $users = $this->queryPegawaiAktif($unitId, $profesiId, $cari)
-                ->select(['id', 'kategori_profesi_id'])
+            $users = $this->queryPegawaiAktif($unitId, $profesiId, $cari, $statusKepegawaian, $allowedUnitIds)
+                ->select(['id', 'kategori_profesi_id', 'status_kepegawaian'])
                 ->with(['berkasPegawais:id,user_id,jenis_berkas_id,tgl_berakhir,status_verifikasi'])
                 ->get();
 
@@ -229,7 +267,8 @@ class KelengkapanKpsService
             return $hitung();
         }
 
-        $cacheKey = 'rekap_kps_agregat:' . ($unitId ?: 'all') . ':' . ($profesiId ?: 'all') . ':' . md5(mb_strtolower(trim($cari)));
+        $scopeKey = $allowedUnitIds === null ? 'all' : implode(',', $allowedUnitIds);
+        $cacheKey = 'rekap_kps_agregat:' . ($unitId ?: 'all') . ':' . ($profesiId ?: 'all') . ':' . ($statusKepegawaian ?: 'all') . ':' . md5($scopeKey . '|' . mb_strtolower(trim($cari)));
 
         return Cache::remember($cacheKey, 60, $hitung);
     }

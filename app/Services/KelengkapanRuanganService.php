@@ -94,7 +94,7 @@ class KelengkapanRuanganService
     /**
      * @return Collection<int, array{unit: Unit, ringkasan: array}>
      */
-    public function rekapSemuaUnit(?int $unitId = null, string $cari = ''): Collection
+    public function rekapSemuaUnit(?int $unitId = null, string $cari = '', ?array $allowedUnitIds = null): Collection
     {
         $jenisAktif = JenisBerkasRuangan::query()
             ->with('units:id')
@@ -107,6 +107,13 @@ class KelengkapanRuanganService
             ->with(['berkasRuangans:id,unit_id,jenis_berkas_ruangan_id,tgl_berakhir,status_verifikasi'])
             ->orderBy('nama');
 
+        if ($allowedUnitIds !== null) {
+            if ($allowedUnitIds === []) {
+                $query->whereRaw('1 = 0');
+            } else {
+                $query->whereIn('id', $allowedUnitIds);
+            }
+        }
         if ($unitId) {
             $query->where('id', $unitId);
         }

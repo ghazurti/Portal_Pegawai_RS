@@ -84,6 +84,9 @@ class DokumenRs extends Model
         if ($user->isKepalaRuangan() && $user->unit_id && $this->unit_pemilik_id === $user->unit_id) {
             return true;
         }
+        if ($user->isKepalaBidang() && $this->unit_pemilik_id && in_array($this->unit_pemilik_id, $user->unitIdsDalamCakupan() ?? [], true)) {
+            return true;
+        }
         if ($this->status !== self::STATUS_BERLAKU) {
             return false;
         }

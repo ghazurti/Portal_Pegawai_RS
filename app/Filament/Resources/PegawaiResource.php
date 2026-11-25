@@ -3,6 +3,7 @@
 namespace App\Filament\Resources;
 
 use App\Filament\Resources\PegawaiResource\Pages;
+use App\Models\Unit;
 use App\Models\User;
 use Filament\Forms;
 use Filament\Forms\Form;
@@ -69,12 +70,30 @@ class PegawaiResource extends Resource
                 ->relationship('kategoriProfesi', 'nama')
                 ->searchable()
                 ->preload(),
+            Forms\Components\Select::make('status_kepegawaian')
+                ->label('Status Kepegawaian')
+                ->options(User::STATUS_KEPEGAWAIAN)
+                ->native(false)
+                ->helperText('PNS dan PPPK Penuh Waktu dikelompokkan sebagai ASN Penuh Waktu; PPPK Paruh Waktu dan Kontrak terpisah.'),
             Forms\Components\Select::make('role')
                 ->label('Peran Akses')
                 ->options(fn () => Auth::user()?->opsiRoleBolehDitetapkan() ?? [User::ROLE_PEGAWAI => User::ROLES[User::ROLE_PEGAWAI]])
                 ->in(fn () => array_keys(Auth::user()?->opsiRoleBolehDitetapkan() ?? [User::ROLE_PEGAWAI => true]))
                 ->default(User::ROLE_PEGAWAI)
+                ->live()
                 ->required(),
+            Forms\Components\Select::make('bidang_kelola')
+                ->label('Bidang yang Dipantau (Kabid / TU)')
+                ->options(fn () => Unit::query()
+                    ->whereNotNull('bidang')
+                    ->where('bidang', '!=', '')
+                    ->distinct()
+                    ->orderBy('bidang')
+                    ->pluck('bidang', 'bidang')
+                    ->all())
+                ->searchable()
+                ->visible(fn (Forms\Get $get): bool => in_array($get('role'), [User::ROLE_KABID, User::ROLE_TU], true))
+                ->helperText('Pilih bidang yang menjadi cakupan pemantauan Kepala Bidang / Tata Usaha.'),
             Forms\Components\TextInput::make('no_hp')
                 ->label('Nomor WhatsApp / HP')
                 ->maxLength(30),
@@ -104,18 +123,50 @@ class PegawaiResource extends Resource
                 Tables\Columns\TextColumn::make('name')->label('Nama Pegawai')->searchable()->sortable(),
                 Tables\Columns\TextColumn::make('unit.nama')->label('Unit')->placeholder('-')->sortable(),
                 Tables\Columns\TextColumn::make('kategoriProfesi.nama')->label('Profesi')->placeholder('-')->sortable(),
+                Tables\Columns\TextColumn::make('status_kepegawaian')
+                    ->label('Status')
+                    ->badge()
+                    ->color(fn (?string $state) => User::warnaStatusKepegawaian($state))
+                    ->formatStateUsing(fn (?string $state) => $state ? (User::STATUS_KEPEGAWAIAN[$state] ?? $state) : 'Belum Diatur')
+                    ->sortable(),
                 Tables\Columns\TextColumn::make('role')
                     ->label('Peran')
                     ->badge()
                     ->formatStateUsing(fn (?string $state) => User::ROLES[$state] ?? (string) $state),
+                Tables\Columns\TextColumn::make('bidang_kelola')
+                    ->label('Bidang Kelola')
+                    ->placeholder('-')
+                    ->toggleable(isToggledHiddenByDefault: true),
                 Tables\Columns\IconColumn::make('aktif')->label('Aktif')->boolean(),
             ])
             ->filters([
                 Tables\Filters\SelectFilter::make('unit_id')->label('Unit')->relationship('unit', 'nama'),
                 Tables\Filters\SelectFilter::make('kategori_profesi_id')->label('Profesi')->relationship('kategoriProfesi', 'nama'),
+                Tables\Filters\SelectFilter::make('status_kepegawaian')
+                    ->label('Status Kepegawaian')
+                    ->options(User::STATUS_KEPEGAWAIAN),
                 Tables\Filters\SelectFilter::make('role')->label('Peran')->options(User::ROLES),
             ])
             ->actions([
+                Tables\Actions\Action::make('lihat_berkas')
+                    ->label('Berkas')
+                    ->icon('heroicon-o-folder-open')
+                    ->color('info')
+                    ->modalHeading(fn (User $record) => 'Arsip Berkas: ' . $record->name)
+                    ->modalWidth('5xl')
+                    ->modalSubmitAction(false)
+                    ->modalCancelActionLabel('Tutup')
+                    ->modalContent(function (User $record) {
+                        $record->loadMissing(['unit', 'kategoriProfesi', 'berkasPegawais']);
+                        $wajibList = $record->jenisBerkasWajib();
+                        $ringkasan = app(\App\Services\KelengkapanKpsService::class)->ringkasanUntukUser($record);
+                        return view('filament.modals.berkas-pegawai-detail', [
+                            'pegawai' => $record,
+                            'wajibList' => $wajibList,
+                            'berkasGroups' => $record->berkasPegawais->groupBy('jenis_berkas_id'),
+                            'ringkasan' => $ringkasan,
+                        ]);
+                    }),
                 Tables\Actions\EditAction::make()
                     ->visible(fn (User $record) => (bool) Auth::user()?->bolehKelolaPegawai($record))
                     ->mutateFormDataUsing(function (User $record, array $data): array {

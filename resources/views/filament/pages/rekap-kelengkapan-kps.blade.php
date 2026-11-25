@@ -12,7 +12,7 @@
             </x-filament::button>
         </div>
 
-        <div class="mt-4 grid grid-cols-1 gap-3 md:grid-cols-4">
+        <div class="mt-4 grid grid-cols-1 gap-3 md:grid-cols-5">
             <div>
                 <label class="mb-1 block text-xs font-medium text-gray-700 dark:text-gray-300">Cari Nama / NIP / Jabatan</label>
                 <input
@@ -49,6 +49,18 @@
                     <option value="">Semua Profesi</option>
                     @foreach ($profesis as $pr)
                         <option value="{{ $pr->id }}">{{ $pr->nama }}</option>
+                    @endforeach
+                </select>
+            </div>
+            <div>
+                <label class="mb-1 block text-xs font-medium text-gray-700 dark:text-gray-300">Status Kepegawaian</label>
+                <select
+                    wire:model.live="statusKepegawaian"
+                    class="w-full rounded-lg border-gray-300 text-sm shadow-sm focus:border-teal-600 focus:ring-teal-600 dark:border-gray-700 dark:bg-gray-900 dark:text-white"
+                >
+                    <option value="">Semua Status</option>
+                    @foreach ($statusOptions as $val => $lbl)
+                        <option value="{{ $val }}">{{ $lbl }}</option>
                     @endforeach
                 </select>
             </div>
