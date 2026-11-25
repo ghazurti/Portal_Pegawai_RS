@@ -51,6 +51,10 @@ class KategoriProfesiResource extends Resource
             ])
             ->actions([
                 Tables\Actions\EditAction::make(),
+                Tables\Actions\DeleteAction::make()->label('Hapus'),
+            ])
+            ->bulkActions([
+                Tables\Actions\DeleteBulkAction::make()->label('Hapus Terpilih'),
             ]);
     }
 

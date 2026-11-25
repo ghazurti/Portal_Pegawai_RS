@@ -236,6 +236,14 @@ class BerkasPegawaiResource extends Resource
                         ActivityLog::catat('verifikasi_tolak_berkas', $r, $r->user?->name . ' - ' . $data['catatan_verifikator']);
                         Notification::make()->title('Berkas dikembalikan untuk revisi')->warning()->send();
                     }),
+                Tables\Actions\DeleteAction::make()
+                    ->label('Hapus')
+                    ->after(function (BerkasPegawai $r) {
+                        if ($r->file_path) {
+                            \Illuminate\Support\Facades\Storage::disk('berkas_privat')->delete($r->file_path);
+                        }
+                        ActivityLog::catat('hapus_berkas_pegawai', null, ($r->user?->name ?: '-') . ' - ' . ($r->jenisBerkas?->nama ?: '-'));
+                    }),
             ])
             ->bulkActions([
                 Tables\Actions\BulkAction::make('setujui_massal')
@@ -259,6 +267,20 @@ class BerkasPegawaiResource extends Resource
                         }
                         ActivityLog::catat('verifikasi_setujui_massal', null, "Menyetujui {$jumlah} berkas pegawai");
                         Notification::make()->title("{$jumlah} berkas disetujui")->success()->send();
+                    }),
+                Tables\Actions\DeleteBulkAction::make()
+                    ->label('Hapus Terpilih')
+                    ->action(function (\Illuminate\Database\Eloquent\Collection $records) {
+                        $jumlah = 0;
+                        foreach ($records as $r) {
+                            if ($r->file_path) {
+                                \Illuminate\Support\Facades\Storage::disk('berkas_privat')->delete($r->file_path);
+                            }
+                            $r->delete();
+                            $jumlah++;
+                        }
+                        ActivityLog::catat('hapus_massal_berkas_pegawai', null, "Menghapus {$jumlah} berkas pegawai");
+                        Notification::make()->title("{$jumlah} berkas pegawai dihapus")->success()->send();
                     }),
             ]);
     }

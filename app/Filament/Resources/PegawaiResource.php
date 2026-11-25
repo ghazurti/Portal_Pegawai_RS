@@ -179,6 +179,30 @@ class PegawaiResource extends Resource
 
                         return $data;
                     }),
+                Tables\Actions\DeleteAction::make()
+                    ->label('Hapus')
+                    ->visible(fn (User $record) => $record->id !== Auth::id() && (bool) Auth::user()?->bolehKelolaPegawai($record))
+                    ->after(function (User $record) {
+                        \App\Models\ActivityLog::catat('hapus_pegawai', null, $record->name . ' (' . $record->email . ')');
+                    }),
+            ])
+            ->bulkActions([
+                Tables\Actions\DeleteBulkAction::make()
+                    ->label('Hapus Terpilih')
+                    ->action(function (\Illuminate\Database\Eloquent\Collection $records) {
+                        /** @var User|null $actor */
+                        $actor = Auth::user();
+                        $dihapus = 0;
+                        foreach ($records as $record) {
+                            if ($record->id === Auth::id() || !$actor?->bolehKelolaPegawai($record)) {
+                                continue;
+                            }
+                            $record->delete();
+                            $dihapus++;
+                        }
+                        \App\Models\ActivityLog::catat('hapus_massal_pegawai', null, "Menghapus {$dihapus} akun pegawai");
+                        \Filament\Notifications\Notification::make()->title("{$dihapus} pegawai dihapus")->success()->send();
+                    }),
             ]);
     }
 

@@ -317,6 +317,40 @@ class DokumenRsResource extends Resource
                     ->color('gray')
                     ->url(fn (DokumenRs $r) => route('export.sosialisasi-sop', $r)),
                 Tables\Actions\EditAction::make(),
+                Tables\Actions\DeleteAction::make()
+                    ->label('Hapus')
+                    ->before(function (DokumenRs $record) {
+                        $record->loadMissing('versis');
+                        foreach ($record->versis as $v) {
+                            if ($v->file_path) {
+                                \Illuminate\Support\Facades\Storage::disk('berkas_privat')->delete($v->file_path);
+                            }
+                        }
+                        $record->update(['versi_aktif_id' => null]);
+                    })
+                    ->after(function (DokumenRs $record) {
+                        ActivityLog::catat('hapus_dokumen_rs', null, $record->nomor_dokumen . ' - ' . $record->judul);
+                    }),
+            ])
+            ->bulkActions([
+                Tables\Actions\DeleteBulkAction::make()
+                    ->label('Hapus Terpilih')
+                    ->action(function (\Illuminate\Database\Eloquent\Collection $records) {
+                        $jumlah = 0;
+                        foreach ($records as $record) {
+                            $record->loadMissing('versis');
+                            foreach ($record->versis as $v) {
+                                if ($v->file_path) {
+                                    \Illuminate\Support\Facades\Storage::disk('berkas_privat')->delete($v->file_path);
+                                }
+                            }
+                            $record->update(['versi_aktif_id' => null]);
+                            $record->delete();
+                            $jumlah++;
+                        }
+                        ActivityLog::catat('hapus_massal_dokumen_rs', null, "Menghapus {$jumlah} dokumen RS");
+                        Notification::make()->title("{$jumlah} dokumen RS dihapus")->success()->send();
+                    }),
             ]);
     }
 

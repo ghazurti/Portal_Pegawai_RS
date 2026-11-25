@@ -204,6 +204,30 @@ class BerkasRuanganResource extends Resource
                         ActivityLog::catat('verifikasi_tolak_berkas_ruangan', $r, $r->unit?->nama . ' - ' . $data['catatan_verifikator']);
                         Notification::make()->title('Berkas ruangan dikembalikan untuk revisi')->warning()->send();
                     }),
+                Tables\Actions\DeleteAction::make()
+                    ->label('Hapus')
+                    ->after(function (BerkasRuangan $r) {
+                        if ($r->file_path) {
+                            \Illuminate\Support\Facades\Storage::disk('berkas_privat')->delete($r->file_path);
+                        }
+                        ActivityLog::catat('hapus_berkas_ruangan', null, ($r->unit?->nama ?: '-') . ' - ' . ($r->jenisBerkasRuangan?->nama ?: '-'));
+                    }),
+            ])
+            ->bulkActions([
+                Tables\Actions\DeleteBulkAction::make()
+                    ->label('Hapus Terpilih')
+                    ->action(function (\Illuminate\Database\Eloquent\Collection $records) {
+                        $jumlah = 0;
+                        foreach ($records as $r) {
+                            if ($r->file_path) {
+                                \Illuminate\Support\Facades\Storage::disk('berkas_privat')->delete($r->file_path);
+                            }
+                            $r->delete();
+                            $jumlah++;
+                        }
+                        ActivityLog::catat('hapus_massal_berkas_ruangan', null, "Menghapus {$jumlah} berkas ruangan");
+                        Notification::make()->title("{$jumlah} berkas ruangan dihapus")->success()->send();
+                    }),
             ]);
     }
 

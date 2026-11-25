@@ -106,6 +106,38 @@ class JenisBerkasResource extends Resource
             ])
             ->actions([
                 Tables\Actions\EditAction::make(),
+                Tables\Actions\DeleteAction::make()
+                    ->label('Hapus')
+                    ->before(function (Tables\Actions\DeleteAction $action, JenisBerkas $record) {
+                        if ($record->berkasPegawais()->exists()) {
+                            \Filament\Notifications\Notification::make()
+                                ->title('Tidak dapat dihapus')
+                                ->body('Jenis berkas ini sudah dipakai oleh berkas pegawai. Nonaktifkan saja agar arsip lama tetap aman.')
+                                ->danger()
+                                ->send();
+                            $action->cancel();
+                        }
+                    }),
+            ])
+            ->bulkActions([
+                Tables\Actions\DeleteBulkAction::make()
+                    ->label('Hapus Terpilih')
+                    ->action(function (\Illuminate\Database\Eloquent\Collection $records) {
+                        $dihapus = 0;
+                        $dilewati = 0;
+                        foreach ($records as $record) {
+                            if ($record->berkasPegawais()->exists()) {
+                                $dilewati++;
+                                continue;
+                            }
+                            $record->delete();
+                            $dihapus++;
+                        }
+                        \Filament\Notifications\Notification::make()
+                            ->title("{$dihapus} jenis berkas dihapus" . ($dilewati > 0 ? " ({$dilewati} dilewati karena masih dipakai)" : ''))
+                            ->status($dilewati > 0 ? 'warning' : 'success')
+                            ->send();
+                    }),
             ]);
     }
 
