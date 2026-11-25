@@ -33,38 +33,40 @@ class StatRingkasanWidget extends BaseWidget
 
         $stats = [];
 
-        $ringkasan = app(KelengkapanKpsService::class)->ringkasanUntukUser($user->loadMissing('berkasPegawais'));
-        $warnaBerkas = $ringkasan['kedaluwarsa'] > 0 || $ringkasan['ditolak'] > 0
-            ? 'danger'
-            : ($ringkasan['persen'] >= 100.0 ? 'success' : 'warning');
+        if (! $user->isAdminIt()) {
+            $ringkasan = app(KelengkapanKpsService::class)->ringkasanUntukUser($user->loadMissing('berkasPegawais'));
+            $warnaBerkas = $ringkasan['kedaluwarsa'] > 0 || $ringkasan['ditolak'] > 0
+                ? 'danger'
+                : ($ringkasan['persen'] >= 100.0 ? 'success' : 'warning');
 
-        $stats[] = Stat::make('Kelengkapan Berkas Saya', $ringkasan['disetujui'] . ' / ' . $ringkasan['wajib'] . ' (' . $ringkasan['persen'] . '%)')
-            ->description(
-                $ringkasan['ditolak'] > 0
-                    ? $ringkasan['ditolak'] . ' berkas perlu revisi'
-                    : ($ringkasan['belum_upload'] > 0
-                        ? $ringkasan['belum_upload'] . ' berkas wajib belum diunggah'
-                        : ($ringkasan['menunggu'] > 0 ? $ringkasan['menunggu'] . ' menunggu verifikasi SDM' : 'Semua berkas wajib lengkap'))
-            )
-            ->color($warnaBerkas)
-            ->url(BerkasSayaPage::getUrl());
+            $stats[] = Stat::make('Kelengkapan Berkas Saya', $ringkasan['disetujui'] . ' / ' . $ringkasan['wajib'] . ' (' . $ringkasan['persen'] . '%)')
+                ->description(
+                    $ringkasan['ditolak'] > 0
+                        ? $ringkasan['ditolak'] . ' berkas perlu revisi'
+                        : ($ringkasan['belum_upload'] > 0
+                            ? $ringkasan['belum_upload'] . ' berkas wajib belum diunggah'
+                            : ($ringkasan['menunggu'] > 0 ? $ringkasan['menunggu'] . ' menunggu verifikasi SDM' : 'Semua berkas wajib lengkap'))
+                )
+                ->color($warnaBerkas)
+                ->url(BerkasSayaPage::getUrl());
 
-        if ($user->unit_id) {
-            $unit = Unit::with('berkasRuangans')->find($user->unit_id);
-            if ($unit) {
-                $rUnit = app(KelengkapanRuanganService::class)->ringkasanUntukUnit($unit);
-                $warnaUnit = $rUnit['kedaluwarsa'] > 0 || $rUnit['ditolak'] > 0
-                    ? 'danger'
-                    : ($rUnit['persen'] >= 100.0 ? 'success' : 'warning');
+            if ($user->unit_id) {
+                $unit = Unit::with('berkasRuangans')->find($user->unit_id);
+                if ($unit) {
+                    $rUnit = app(KelengkapanRuanganService::class)->ringkasanUntukUnit($unit);
+                    $warnaUnit = $rUnit['kedaluwarsa'] > 0 || $rUnit['ditolak'] > 0
+                        ? 'danger'
+                        : ($rUnit['persen'] >= 100.0 ? 'success' : 'warning');
 
-                $stats[] = Stat::make('Berkas Ruangan (' . $unit->kode . ')', $rUnit['disetujui'] . ' / ' . $rUnit['wajib'] . ' (' . $rUnit['persen'] . '%)')
-                    ->description(
-                        $rUnit['ditolak'] > 0
-                            ? $rUnit['ditolak'] . ' berkas ruangan perlu revisi'
-                            : ($rUnit['belum_upload'] > 0 ? $rUnit['belum_upload'] . ' berkas ruangan belum diunggah' : 'Kelengkapan berkas ' . $unit->nama)
-                    )
-                    ->color($warnaUnit)
-                    ->url(BerkasRuanganSayaPage::getUrl());
+                    $stats[] = Stat::make('Berkas Ruangan (' . $unit->kode . ')', $rUnit['disetujui'] . ' / ' . $rUnit['wajib'] . ' (' . $rUnit['persen'] . '%)')
+                        ->description(
+                            $rUnit['ditolak'] > 0
+                                ? $rUnit['ditolak'] . ' berkas ruangan perlu revisi'
+                                : ($rUnit['belum_upload'] > 0 ? $rUnit['belum_upload'] . ' berkas ruangan belum diunggah' : 'Kelengkapan berkas ' . $unit->nama)
+                        )
+                        ->color($warnaUnit)
+                        ->url(BerkasRuanganSayaPage::getUrl());
+                }
             }
         }
 

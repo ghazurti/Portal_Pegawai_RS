@@ -115,6 +115,7 @@ class KelengkapanKpsService
     ): Builder {
         $query = User::query()
             ->where('aktif', true)
+            ->where('role', '!=', User::ROLE_ADMIN)
             ->orderBy('name');
 
         if ($allowedUnitIds !== null) {

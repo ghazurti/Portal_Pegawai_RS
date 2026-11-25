@@ -29,6 +29,14 @@ class BerkasRuanganSayaPage extends Page
 
     protected static string $view = 'filament.pages.berkas-ruangan-saya';
 
+    public static function canAccess(): bool
+    {
+        /** @var User|null $user */
+        $user = Auth::user();
+
+        return $user !== null && ! $user->isAdminIt();
+    }
+
     public string $selectedUnitId = '';
 
     public function mount(): void

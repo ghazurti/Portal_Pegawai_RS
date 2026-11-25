@@ -28,6 +28,14 @@ class BerkasSayaPage extends Page
 
     protected static string $view = 'filament.pages.berkas-saya';
 
+    public static function canAccess(): bool
+    {
+        /** @var User|null $user */
+        $user = Auth::user();
+
+        return $user !== null && ! $user->isAdminIt();
+    }
+
     public function getViewData(): array
     {
         /** @var User $user */
